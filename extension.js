@@ -6,7 +6,12 @@ const vscode = require("vscode");
 // Your extension is activated the very first time the command is executed
 const hexColorPattern = /#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b/g;
 const rgbColorPattern = /rgb\((\d{1,3}),\s*(\d{1,3}),\s*(\d{1,3})\)/g;
+const variableUsagePattern =
+  /\$[a-zA-Z_][a-zA-Z0-9_-]*:\s*([#0-9a-fA-F]+|rgb\(\d{1,3},\s*\d{1,3},\s*\d{1,3}\))/g;
+const variableUsageMatchPattern = /\$([a-zA-Z_][a-zA-Z0-9_-]*)/g; // regex to find variable usages
+
 let currentDecorations = []; //global declaration
+let colorVariables = {};
 
 /**
  * @param {vscode.ExtensionContext} context
@@ -101,6 +106,37 @@ function activate(context) {
         color: isColorLight(match[0]) ? "black" : "white",
       });
       decorationArray.push({ decoration, range });
+    }
+
+    // For variable declarations with colors
+    while ((match = variableUsagePattern.exec(text)) !== null) {
+      const variableName = match[0].split(":")[0].trim(); // Extract variable name
+      const colorValue = match[1].trim(); // Extract color value
+      colorVariables[variableName] = colorValue;
+    }
+
+    while ((match = variableUsageMatchPattern.exec(text)) !== null) {
+      const variableName = match[0].trim();
+
+      // Getting the index just after the matched variable
+      const afterMatchIndex = match.index + variableName.length;
+      // Checking if ':' or '=' is ahead
+      const charAhead = text.slice(afterMatchIndex).trimStart()[0];
+      // If the next non-whitespace character is ':' or '=' to skip highlighting
+      if (charAhead === ":" || charAhead === "=") {
+        continue; //yo true bhayesi loop ko condition check garna janxa feri
+      }
+
+      if (colorVariables[variableName]) {
+        const startPosition = editor.document.positionAt(match.index);
+        const endPosition = editor.document.positionAt(afterMatchIndex);
+        const range = new vscode.Range(startPosition, endPosition);
+        const decoration = vscode.window.createTextEditorDecorationType({
+          backgroundColor: colorVariables[variableName],
+          color: isColorLight(colorVariables[variableName]) ? "black" : "white",
+        });
+        decorationArray.push({ decoration, range });
+      }
     }
 
     decorationArray.forEach((dec) => {
